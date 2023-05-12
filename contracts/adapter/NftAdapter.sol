@@ -48,6 +48,77 @@ contract NftAdapter is ERC721Holder {
 
   }
 
+  function sellForOtherToken(address to, bytes memory data, IERC721 token, uint tokenId, address owner, address toSwap, bytes memory dataSwap, IERC20 tokenOut, uint minTokenOut) external payable {
+    token.approve(address(this), tokenId);
+    token.safeTransferFrom(owner, address(this), tokenId);
+    assembly {
+      let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
+
+    assembly {
+      let result := call(gas(), toSwap, 0, add(dataSwap, 0x20), mload(dataSwap), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
+
+    // transfer the min token out to the owner
+    tokenOut.transfer(owner, minTokenOut);
+
+    // transfer remaining token balance to ADAPTER_OWNER
+    tokenOut.transfer(address(ADAPTER_OWNER), tokenOut.balanceOf(address(this)));
+  }
+
+  function sellForEth(address to, bytes memory data, IERC721 token, uint tokenId, address payable owner, uint minTokenOut) external payable {
+    token.approve(address(this), tokenId);
+    token.safeTransferFrom(owner, address(this), tokenId);
+    assembly {
+      let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
+    uint wethBal = weth.balanceOf(address(this));
+    weth.withdraw(wethBal);
+    owner.transfer(minTokenOut);
+
+    uint ethBalRemaining = address(this).balance;
+    ADAPTER_OWNER.transfer(ethBalRemaining);
+  }
+  
+  function sellForTokenToWethToEth(address to, bytes memory data, IERC721 token, uint tokenId, address payable owner, address toSwap, bytes memory dataSwap, uint minTokenOut) external payable {
+    token.approve(address(this), tokenId);
+    token.safeTransferFrom(owner, address(this), tokenId);
+    assembly {
+      let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
+
+    assembly {
+      let result := call(gas(), toSwap, 0, add(dataSwap, 0x20), mload(dataSwap), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
+    
+    uint wethBal = weth.balanceOf(address(this));
+    weth.withdraw(wethBal);
+    owner.transfer(minTokenOut);
+    
+    uint ethBalRemaining = address(this).balance;
+    ADAPTER_OWNER.transfer(ethBalRemaining);
+  }
+
   function buyWithEth(address to, bytes memory data, uint amount, IERC721 token, uint tokenId, address owner) external payable {
     _executeAndTransfer(to, data, amount, token, tokenId, owner);
   }
