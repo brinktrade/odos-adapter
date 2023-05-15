@@ -29,9 +29,9 @@ contract NftAdapter is ERC721Holder {
     weth = _weth;
   }
 
-  function sellForToken(address to, bytes memory data, IERC721 token, uint tokenId, address owner, IERC20 tokenOut, uint minTokenOut) external payable {
-    token.approve(address(this), tokenId);
-    token.safeTransferFrom(owner, address(this), tokenId);
+  function sellForToken(address to, bytes memory data, IERC721 token, uint tokenId, address owner, IERC20 tokenOut, uint amount) external payable {
+    token.approve(to, tokenId);
+
     assembly {
       let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
       if eq(result, 0) {
@@ -41,16 +41,16 @@ contract NftAdapter is ERC721Holder {
     }
 
     // transfer the min token out to the owner
-    tokenOut.transfer(owner, minTokenOut);
+    tokenOut.transfer(owner, amount);
 
     // transfer remaining token balance to ADAPTER_OWNER
     tokenOut.transfer(address(ADAPTER_OWNER), tokenOut.balanceOf(address(this)));
 
   }
 
-  function sellForOtherToken(address to, bytes memory data, IERC721 token, uint tokenId, address owner, address toSwap, bytes memory dataSwap, IERC20 tokenOut, uint minTokenOut) external payable {
-    token.approve(address(this), tokenId);
-    token.safeTransferFrom(owner, address(this), tokenId);
+  function sellForTokenAndSwap(address to, bytes memory data, IERC721 tokenIn, uint tokenId, address owner, IERC20 bridgeToken, address toSwap, bytes memory dataSwap, IERC20 tokenOut, uint amount) external payable {
+    tokenIn.approve(to, tokenId);
+
     assembly {
       let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
       if eq(result, 0) {
@@ -68,15 +68,18 @@ contract NftAdapter is ERC721Holder {
     }
 
     // transfer the min token out to the owner
-    tokenOut.transfer(owner, minTokenOut);
+    tokenOut.transfer(owner, amount);
 
     // transfer remaining token balance to ADAPTER_OWNER
     tokenOut.transfer(address(ADAPTER_OWNER), tokenOut.balanceOf(address(this)));
+
+    // transfer remaining bridge token balance to ADAPTER_OWNER
+    bridgeToken.transfer(address(ADAPTER_OWNER), bridgeToken.balanceOf(address(this)));
   }
 
-  function sellForEth(address to, bytes memory data, IERC721 token, uint tokenId, address payable owner, uint minTokenOut) external payable {
-    token.approve(address(this), tokenId);
-    token.safeTransferFrom(owner, address(this), tokenId);
+  function sellForEth(address to, bytes memory data, IERC721 token, uint tokenId, address payable owner, uint amount) external payable {
+    token.approve(to, tokenId);
+
     assembly {
       let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
       if eq(result, 0) {
@@ -86,15 +89,15 @@ contract NftAdapter is ERC721Holder {
     }
     uint wethBal = weth.balanceOf(address(this));
     weth.withdraw(wethBal);
-    owner.transfer(minTokenOut);
+    owner.transfer(amount);
 
-    uint ethBalRemaining = address(this).balance;
+    uint ethBalRemaining = wethBal - amount;
     ADAPTER_OWNER.transfer(ethBalRemaining);
   }
   
-  function sellForTokenToWethToEth(address to, bytes memory data, IERC721 token, uint tokenId, address payable owner, address toSwap, bytes memory dataSwap, uint minTokenOut) external payable {
-    token.approve(address(this), tokenId);
-    token.safeTransferFrom(owner, address(this), tokenId);
+  function sellForTokenToWethToEth(address to, bytes memory data, IERC721 token, uint tokenId, address payable owner, address toSwap, bytes memory dataSwap, uint amount) external payable {
+    token.approve(to, tokenId);
+
     assembly {
       let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
       if eq(result, 0) {
@@ -113,7 +116,7 @@ contract NftAdapter is ERC721Holder {
     
     uint wethBal = weth.balanceOf(address(this));
     weth.withdraw(wethBal);
-    owner.transfer(minTokenOut);
+    owner.transfer(amount);
     
     uint ethBalRemaining = address(this).balance;
     ADAPTER_OWNER.transfer(ethBalRemaining);
