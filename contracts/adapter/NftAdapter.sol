@@ -87,6 +87,21 @@ contract NftAdapter is ERC721Holder {
         revert(0, returndatasize())
       }
     }
+
+    owner.transfer(amount);
+    ADAPTER_OWNER.transfer(address(this).balance);
+  }
+
+  function sellForWethToEth(address to, bytes memory data, IERC721 token, uint tokenId, address payable owner, uint amount) external payable {
+    token.approve(to, tokenId);
+
+    assembly {
+      let result := call(gas(), to, 0, add(data, 0x20), mload(data), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
     uint wethBal = weth.balanceOf(address(this));
     weth.withdraw(wethBal);
     owner.transfer(amount);
