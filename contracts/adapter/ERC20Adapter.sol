@@ -87,6 +87,59 @@ contract ERC20Adapter {
     }
   }
 
+  /// @dev Makes a delegateCall to a router with swap byte data
+  /// @dev returns the requested tokenOutAmount to Account and keeps the rest
+  /// @param to address usually a router contract
+  /// @param data swap byte data 
+  /// @param tokenIn Address of the token to be swapped
+  /// @param tokenOut Address of the token to be returned from the swap
+  /// @param tokenOutAmount Amount of tokenOut to transfer to account
+  /// @param account Address of the account to receive the tokenOut
+  /// @param minTokenInArb Minimum amount of tokenIn arbitrage revenue remaining for ADAPTER_OWNER
+  /// @param minTokenOutArb Minimum amount of tokenOut arbitrage revenue remaining for ADAPTER_OWNER
+  function erc20DelegateCallSwap(address to, bytes memory data, IERC20 tokenIn, IERC20 tokenOut, uint tokenOutAmount, address payable account, uint minTokenInArb, uint minTokenOutArb) external payable {
+    if (isETH(tokenIn)) {
+      tokenIn = IERC20(address(weth));
+      weth.deposit{ value: address(this).balance }();
+    }
+
+    assembly {
+      let result := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
+
+    if (isETH(tokenOut)) {
+      uint wethBal = weth.balanceOf(address(this));
+      weth.withdraw(wethBal);
+      if (wethBal < tokenOutAmount) {
+        revert NotEnoughETH();
+      }
+      account.transfer(tokenOutAmount);
+      uint ethBalRemaining = address(this).balance;
+      if (ethBalRemaining < minTokenOutArb) {
+        revert NotEnoughTokenOut(ethBalRemaining);
+      }
+      ADAPTER_OWNER.transfer(ethBalRemaining);
+    } else {
+      tokenOut.transfer(account, tokenOutAmount);
+      uint tokenOutBalRemaining = tokenOut.balanceOf(address(this));
+      if (tokenOutBalRemaining < minTokenOutArb) {
+        revert NotEnoughTokenOut(tokenOutBalRemaining);
+      }
+      tokenOut.transfer(ADAPTER_OWNER, tokenOutBalRemaining);
+    }
+
+    uint tokenInBalRemaining = tokenIn.balanceOf(address(this));
+    if (tokenInBalRemaining < minTokenInArb) {
+      revert NotEnoughTokenIn(tokenInBalRemaining);
+    } else if (tokenInBalRemaining > 0) {
+      tokenIn.transfer(ADAPTER_OWNER, tokenInBalRemaining);
+    }
+  }
+
   function _routerApproveMax(address to, IERC20 token) internal {
     if (token.allowance(address(this), to) < MAX_INT) {
       token.approve(to, MAX_INT);
