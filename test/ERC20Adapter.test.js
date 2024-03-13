@@ -7,6 +7,8 @@ const { BN18 } = constants
 const setupAdapterOwner = require('./helpers/setupAdapterOwner')
 const axios = require('axios')
 const { post } = require('axios')
+const { Router } = require('@brinkninja/routing')
+
 // const { RouteHandler } = require('@brinkninja/routing')
 
 const DAI_WHALE = '0x2291f52bddc937b5b840d15e551e1da8c80c2b3c'
@@ -20,8 +22,6 @@ const ONE_HUNDRED = BN(100).mul(BN18)
 const TWO_HUNDRED = BN(200).mul(BN18)
 const ONE_MILLION = BN(10).pow(BN(6)).mul(BN18)
 
-// const routeHandler = new RouteHandler()
-
 describe('ERC20Adapter', function () {
   beforeEach(async function () {
     await hre.network.provider.request({
@@ -29,10 +29,11 @@ describe('ERC20Adapter', function () {
       params: [DAI_WHALE],
     })
     const daiWhale = await hre.ethers.getSigner(DAI_WHALE)
-    const ERC20Adapter = await ethers.getContractFactory('ERC20Adapter')
-    this.dai = (await ethers.getContractAt('IERC20', DAI_ADDRESS)).connect(daiWhale)
-    this.weth = (await ethers.getContractAt('IERC20', WETH_ADDRESS)).connect(daiWhale)
-    this.uni = await ethers.getContractAt('IERC20', UNI_ADDRESS)
+    // const ERC20Adapter = await ethers.getContractFactory('ERC20Adapter')
+    const ERC20Adapter = await ethers.getContractFactory('ERC20Adapter02')
+    this.dai = (await ethers.getContractAt('contracts/token/IERC20.sol:IERC20', DAI_ADDRESS)).connect(daiWhale)
+    this.weth = (await ethers.getContractAt('contracts/token/IERC20.sol:IERC20', WETH_ADDRESS)).connect(daiWhale)
+    this.uni = await ethers.getContractAt('contracts/token/IERC20.sol:IERC20', UNI_ADDRESS)
     this.accountAddress = '0xa2884fB9F79D7060Bcfaa0e7D8a25b7F725de2fa'
     this.adapterOwner = await setupAdapterOwner()
     this.adapter = await ERC20Adapter.deploy()
@@ -48,8 +49,8 @@ describe('ERC20Adapter', function () {
     const initialDaiOwnerBalance = await this.dai.balanceOf(this.adapterOwner.address)
     const initialWethOwnerBalance = await this.weth.balanceOf(this.adapterOwner.address)
     
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
     await this.adapter.erc20Swap(toAddress, callData, DAI_ADDRESS, WETH_ADDRESS, '10', this.accountAddress, 0, 0)
 
     const finalWethBalance = await this.weth.balanceOf(this.accountAddress)
@@ -71,8 +72,8 @@ describe('ERC20Adapter', function () {
     const initialWethOwnerBalance = await this.weth.balanceOf(this.adapterOwner.address)
     const initialDaiOwnerBalance = await this.dai.balanceOf(this.adapterOwner.address)
   
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
     await this.adapter.erc20Swap(toAddress, callData, WETH_ADDRESS, DAI_ADDRESS, '10', this.accountAddress, 0, 0)
 
     const finalDaiBalance = await this.dai.balanceOf(this.accountAddress)
@@ -95,9 +96,33 @@ describe('ERC20Adapter', function () {
     const initialDaiOwnerBalance = await this.dai.balanceOf(this.adapterOwner.address)
     const initialUniOwnerBalance = await this.uni.balanceOf(this.adapterOwner.address)
     
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
     await this.adapter.erc20Swap(toAddress, callData, DAI_ADDRESS, UNI_ADDRESS, '10', this.accountAddress, 0, 0)
+
+    const finalUniBalance = await this.uni.balanceOf(this.accountAddress)
+    const finalDaiOwnerBalance = await this.dai.balanceOf(this.adapterOwner.address)
+    const finalUniOwnerBalance = await this.uni.balanceOf(this.adapterOwner.address)
+
+    expect(finalDaiOwnerBalance.eq(initialDaiOwnerBalance.add(ONE_HUNDRED))).to.equal(true)
+    expect(finalUniOwnerBalance.gt(initialUniOwnerBalance)).to.equal(true)
+    expect(finalUniBalance.eq(initialUniBalance.add(BN('10')))).to.equal(true)
+
+    await expectAdapterZeroBalances.call(this)
+  })
+
+  it('token to token with delegateCall', async function () {
+    await this.dai.transfer(this.adapter.address, TWO_HUNDRED)
+
+    const swapObj = await routeMarketSwap({ tokenIn: DAI_ADDRESS, tokenInAmount: ONE_HUNDRED.toString(), tokenOut: UNI_ADDRESS, userAddr: this.adapter.address, source: 'enso' })
+
+    const initialUniBalance = await this.uni.balanceOf(this.accountAddress)
+    const initialDaiOwnerBalance = await this.dai.balanceOf(this.adapterOwner.address)
+    const initialUniOwnerBalance = await this.uni.balanceOf(this.adapterOwner.address)
+    
+    const toAddress = swapObj.to
+    const callData = swapObj.data
+    await this.adapter.erc20DelegateCallSwap(toAddress, callData, DAI_ADDRESS, UNI_ADDRESS, '10', this.accountAddress, 0, 0)
 
     const finalUniBalance = await this.uni.balanceOf(this.accountAddress)
     const finalDaiOwnerBalance = await this.dai.balanceOf(this.adapterOwner.address)
@@ -117,8 +142,8 @@ describe('ERC20Adapter', function () {
     const initialWethOwnerBalance = await this.weth.balanceOf(this.adapterOwner.address)
     const initialUniOwnerBalance = await this.uni.balanceOf(this.adapterOwner.address)
 
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
     await this.adapter.erc20Swap(toAddress, callData, ETH_ADDRESS, UNI_ADDRESS, '10', this.accountAddress, 0, 0, { value: ethers.utils.parseEther("200.0") })
 
     const finalUniBalance = await this.uni.balanceOf(this.accountAddress)
@@ -140,8 +165,8 @@ describe('ERC20Adapter', function () {
     const initialEthOwnerBalance = await ethers.provider.getBalance(this.adapterOwner.address)
     const initialEthBalance = await ethers.provider.getBalance(this.accountAddress);
 
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
     await this.adapter.erc20Swap(toAddress, callData, DAI_ADDRESS, ETH_ADDRESS, '10', this.accountAddress, 0, 0)
 
     const finalDaiOwnerBalance = await this.dai.balanceOf(this.adapterOwner.address)
@@ -158,8 +183,8 @@ describe('ERC20Adapter', function () {
   it('should revert on token to eth swap if not enough eth is available to transfer', async function () {
     await this.dai.transfer(this.adapter.address, ONE_HUNDRED)
     const swapObj = await routeMarketSwap({ tokenIn: DAI_ADDRESS, tokenInAmount: ONE_HUNDRED.toString(), tokenOut: WETH_ADDRESS, userAddr: this.adapter.address })
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
     await expect(
       this.adapter.erc20Swap(toAddress, callData, DAI_ADDRESS, ETH_ADDRESS, TWO_HUNDRED, this.accountAddress, 0, 0)
     ).to.be.revertedWith('NotEnoughETH()')
@@ -168,8 +193,8 @@ describe('ERC20Adapter', function () {
   it('should revert on token to token swap if output amount remaining after swap is less than minTokenOutArb', async function () {
     await this.dai.transfer(this.adapter.address, ONE_HUNDRED)
     const swapObj = await routeMarketSwap({ tokenIn: DAI_ADDRESS, tokenInAmount: ONE_HUNDRED.toString(), tokenOut: UNI_ADDRESS, userAddr: this.adapter.address })
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
 
     // massive amount of UNI out required to force revert
     const minUniOut = ONE_HUNDRED.mul(ONE_MILLION)
@@ -183,8 +208,8 @@ describe('ERC20Adapter', function () {
     await this.dai.transfer(this.adapter.address, ONE_HUNDRED)
 
     const swapObj = await routeMarketSwap({ tokenIn: DAI_ADDRESS, tokenInAmount: ONE_HUNDRED.toString(), tokenOut: WETH_ADDRESS, userAddr: this.adapter.address })
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
 
     // massive amount of ETH out required to force revert
     const minEthOut = ONE_HUNDRED.mul(ONE_MILLION)
@@ -198,8 +223,8 @@ describe('ERC20Adapter', function () {
     await this.dai.transfer(this.adapter.address, TWO_HUNDRED)
 
     const swapObj = await routeMarketSwap({ tokenIn: DAI_ADDRESS, tokenInAmount: ONE_HUNDRED.toString(), tokenOut: UNI_ADDRESS, userAddr: this.adapter.address })
-    const toAddress = swapObj.transaction.to
-    const callData = swapObj.transaction.data
+    const toAddress = swapObj.to
+    const callData = swapObj.data
   
     await expect(
       this.adapter.erc20Swap(toAddress, callData, DAI_ADDRESS, UNI_ADDRESS, '10', this.accountAddress, ONE_HUNDRED.add(BN(1)), 0)
@@ -207,35 +232,49 @@ describe('ERC20Adapter', function () {
   })
 })
 
-async function routeMarketSwap ({ tokenIn, tokenInAmount, tokenOut, userAddr, gasPrice, chainId=1 }) {
-  const reqBody = {
-    chainId,
-    sourceBlacklist: ["Hashflow"],
-    inputTokens: [
-      {
-        tokenAddress: tokenIn,
-        amount: tokenInAmount
-      }
-    ],
-    outputTokens: [
-      {
-        tokenAddress: tokenOut,
-        proportion: 1
-      }
-    ]
+class Token {
+  address
+  standard
+  idsMerkleRoot
+  id
+  disallowFlagged
+
+  constructor (args) {
+    this.address = args.address
+    this.standard = args.standard || 0
+    this.idsMerkleRoot = args.idsMerkleRoot || '0x0000000000000000000000000000000000000000000000000000000000000000'
+    this.id = BigInt(args?.id || 0)
+    this.disallowFlagged = args.disallowFlagged || false
   }
 
-  let resp
-  if (gasPrice) {
-    reqBody.gasPrice = gasPrice
+  toStruct() {
+    return {
+      addr: this.address,
+      standard: this.standard,
+      idsMerkleRoot: this.idsMerkleRoot,
+      id: this.id,
+      disallowFlagged: this.disallowFlagged
+    }
   }
-  if (userAddr) {
-    reqBody.userAddr = userAddr
-    resp = await post(process.env.ODOS_API_URL + '/sor/swap', reqBody)
-  } else {
-    resp = await post(process.env.ODOS_API_URL + '/sor/quote', reqBody)
+
+  toJSON() {
+    return {
+      address: this.address,
+      standard: this.standard,
+      idsMerkleRoot: this.idsMerkleRoot,
+      id: this.id.toString(),
+      disallowFlagged: this.disallowFlagged
+    }
   }
-  return resp.data
+
+}
+
+async function routeMarketSwap ({ tokenIn, tokenInAmount, tokenOut, userAddr, chainId=1, source='odos' }) {
+  const router = new Router({})
+  const tokenInArgs = new Token({ address: tokenIn });
+  const tokenOutArgs = new Token({ address: tokenOut });
+  const resp = await router.routeSwapForInput({ chainId: BigInt(chainId), tokenIn: tokenInArgs, tokenOut: tokenOutArgs, tokenInAmount: BigInt(tokenInAmount), buyer: userAddr, sources: [source] })
+  return resp[0]
 }
 
 async function expectAdapterZeroBalances () {
