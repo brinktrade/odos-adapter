@@ -44,10 +44,8 @@ contract ERC20Adapter02 {
   /// @param minTokenInArb Minimum amount of tokenIn arbitrage revenue remaining for ADAPTER_OWNER
   /// @param minTokenOutArb Minimum amount of tokenOut arbitrage revenue remaining for ADAPTER_OWNER
   function erc20Swap(address to, bytes memory data, IERC20 tokenIn, IERC20 tokenOut, uint tokenOutAmount, address payable account, uint minTokenInArb, uint minTokenOutArb) external payable {
-    if (isETH(tokenIn)) {
-      tokenIn = IERC20(address(weth));
-      weth.deposit{ value: address(this).balance }();
-    }
+
+    _depositEthAsWeth(tokenIn);
     _routerApproveMax(to, tokenIn);
 
     assembly {
@@ -72,10 +70,8 @@ contract ERC20Adapter02 {
   /// @param minTokenInArb Minimum amount of tokenIn arbitrage revenue remaining for ADAPTER_OWNER
   /// @param minTokenOutArb Minimum amount of tokenOut arbitrage revenue remaining for ADAPTER_OWNER
   function erc20DelegateCallSwap(address to, bytes memory data, IERC20 tokenIn, IERC20 tokenOut, uint tokenOutAmount, address payable account, uint minTokenInArb, uint minTokenOutArb) external payable {
-    if (isETH(tokenIn)) {
-      tokenIn = IERC20(address(weth));
-      weth.deposit{ value: address(this).balance }();
-    }
+    
+    _depositEthAsWeth(tokenIn);
 
     assembly {
       let result := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
@@ -86,6 +82,13 @@ contract ERC20Adapter02 {
     }
 
     _transferAssets(tokenIn, tokenOut, tokenOutAmount, account, minTokenInArb, minTokenOutArb);
+  }
+
+  function _depositEthAsWeth(IERC20 tokenIn) internal {
+    if (isETH(tokenIn)) {
+      tokenIn = IERC20(address(weth));
+      weth.deposit{ value: address(this).balance }();
+    }
   }
 
   function _transferAssets(IERC20 tokenIn, IERC20 tokenOut, uint tokenOutAmount, address payable account, uint minTokenInArb, uint minTokenOutArb) internal {
