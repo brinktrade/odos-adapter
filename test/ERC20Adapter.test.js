@@ -22,8 +22,6 @@ const ONE_HUNDRED = BN(100).mul(BN18)
 const TWO_HUNDRED = BN(200).mul(BN18)
 const ONE_MILLION = BN(10).pow(BN(6)).mul(BN18)
 
-// const routeHandler = new RouteHandler()
-
 describe('ERC20Adapter', function () {
   beforeEach(async function () {
     await hre.network.provider.request({
@@ -31,7 +29,8 @@ describe('ERC20Adapter', function () {
       params: [DAI_WHALE],
     })
     const daiWhale = await hre.ethers.getSigner(DAI_WHALE)
-    const ERC20Adapter = await ethers.getContractFactory('ERC20Adapter')
+    // const ERC20Adapter = await ethers.getContractFactory('ERC20Adapter')
+    const ERC20Adapter = await ethers.getContractFactory('ERC20Adapter02')
     this.dai = (await ethers.getContractAt('contracts/token/IERC20.sol:IERC20', DAI_ADDRESS)).connect(daiWhale)
     this.weth = (await ethers.getContractAt('contracts/token/IERC20.sol:IERC20', WETH_ADDRESS)).connect(daiWhale)
     this.uni = await ethers.getContractAt('contracts/token/IERC20.sol:IERC20', UNI_ADDRESS)
@@ -112,7 +111,7 @@ describe('ERC20Adapter', function () {
     await expectAdapterZeroBalances.call(this)
   })
 
-  it('token to token', async function () {
+  it('token to token with delegateCall', async function () {
     await this.dai.transfer(this.adapter.address, TWO_HUNDRED)
 
     const swapObj = await routeMarketSwap({ tokenIn: DAI_ADDRESS, tokenInAmount: ONE_HUNDRED.toString(), tokenOut: UNI_ADDRESS, userAddr: this.adapter.address, source: 'enso' })

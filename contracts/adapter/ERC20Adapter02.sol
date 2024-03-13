@@ -5,9 +5,9 @@ pragma abicoder v1;
 import '../token/IERC20.sol';
 import '../token/IWETH.sol';
 
-/// @title Brink ERC20Adapter
+/// @title Brink ERC20Adapter02
 /// @notice Deployed once and used by Brink executors to fulfill swaps.
-contract ERC20Adapter {
+contract ERC20Adapter02 {
   IWETH public weth;
   bool public initialized;
 
@@ -58,6 +58,37 @@ contract ERC20Adapter {
       }
     }
 
+    _transferAssets(tokenIn, tokenOut, tokenOutAmount, account, minTokenInArb, minTokenOutArb);
+  }
+
+  /// @dev Makes a delegateCall to a router with swap byte data
+  /// @dev returns the requested tokenOutAmount to Account and keeps the rest
+  /// @param to address usually a router contract
+  /// @param data swap byte data 
+  /// @param tokenIn Address of the token to be swapped
+  /// @param tokenOut Address of the token to be returned from the swap
+  /// @param tokenOutAmount Amount of tokenOut to transfer to account
+  /// @param account Address of the account to receive the tokenOut
+  /// @param minTokenInArb Minimum amount of tokenIn arbitrage revenue remaining for ADAPTER_OWNER
+  /// @param minTokenOutArb Minimum amount of tokenOut arbitrage revenue remaining for ADAPTER_OWNER
+  function erc20DelegateCallSwap(address to, bytes memory data, IERC20 tokenIn, IERC20 tokenOut, uint tokenOutAmount, address payable account, uint minTokenInArb, uint minTokenOutArb) external payable {
+    if (isETH(tokenIn)) {
+      tokenIn = IERC20(address(weth));
+      weth.deposit{ value: address(this).balance }();
+    }
+
+    assembly {
+      let result := delegatecall(gas(), to, add(data, 0x20), mload(data), 0, 0)
+      if eq(result, 0) {
+        returndatacopy(0, 0, returndatasize())
+        revert(0, returndatasize())
+      }
+    }
+
+    _transferAssets(tokenIn, tokenOut, tokenOutAmount, account, minTokenInArb, minTokenOutArb);
+  }
+
+  function _transferAssets(IERC20 tokenIn, IERC20 tokenOut, uint tokenOutAmount, address payable account, uint minTokenInArb, uint minTokenOutArb) internal {
     if (isETH(tokenOut)) {
       uint wethBal = weth.balanceOf(address(this));
       weth.withdraw(wethBal);
